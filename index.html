@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lista de Tareas — MongoDB</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 0.25rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #1e3a5f;
+      color: #38bdf8;
+      font-size: 0.75rem;
+      padding: 2px 10px;
+      border-radius: 999px;
+      margin-top: 0.5rem;
+      letter-spacing: 0.5px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-row input {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-row input:focus {
+      border-color: #38bdf8;
+    }
+
+    .input-row button {
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      border: none;
+      background: #38bdf8;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .input-row button:hover { background: #7dd3fc; }
+
+    #estado {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-bottom: 1rem;
+      min-height: 18px;
+    }
+
+    #estado.ok { color: #34d399; }
+    #estado.error { color: #f87171; }
+
+    ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      transition: border-color 0.2s;
+    }
+
+    li:hover { border-color: #475569; }
+
+    li input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    li .texto {
+      flex: 1;
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+
+    li.completada .texto {
+      text-decoration: line-through;
+      color: #475569;
+    }
+
+    li .fecha {
+      font-size: 0.72rem;
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    li .btn-borrar {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    li .btn-borrar:hover { background: #3b1e1e; color: #f87171; }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .stat span { color: #38bdf8; font-weight: 700; }
+
+    .vacio {
+      text-align: center;
+      color: #334155;
+      font-size: 0.9rem;
+      padding: 2rem 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📋 Mis Tareas</h1>
+  <p>Conectado a MongoDB Atlas</p>
+  <span class="badge">✅ Base de datos en la nube</span>
+</header>
+
+<div class="card">
+  <div class="input-row">
+    <input type="text" id="nueva" placeholder="Nueva tarea..." />
+    <button onclick="agregarTarea()">+</button>
+  </div>
+
+  <div id="estado"></div>
+
+  <div class="stats">
+    <div class="stat">Total: <span id="total">0</span></div>
+    <div class="stat">Pendientes: <span id="pendientes">0</span></div>
+    <div class="stat">Completadas: <span id="completadas">0</span></div>
+  </div>
+
+  <ul id="lista"></ul>
+</div>
+
+<script>
+  const API = '/api/tareas';
+
+  async function cargarTareas() {
+    const res = await fetch(API);
+    const tareas = await res.json();
+    renderizar(tareas);
+  }
+
+  function renderizar(tareas) {
+    const lista = document.getElementById('lista');
+    document.getElementById('total').textContent = tareas.length;
+    document.getElementById('pendientes').textContent = tareas.filter(t => !t.completada).length;
+    document.getElementById('completadas').textContent = tareas.filter(t => t.completada).length;
+
+    if (tareas.length === 0) {
+      lista.innerHTML = '<p class="vacio">No hay tareas todavía. ¡Agrega una!</p>';
+      return;
+    }
+
+    lista.innerHTML = tareas.map(t => {
+      const fecha = new Date(t.fecha).toLocaleDateString('es-CO', { day:'2-digit', month:'short' });
+      return `
+        <li id="item-${t._id}" class="${t.completada ? 'completada' : ''}">
+          <input type="checkbox" ${t.completada ? 'checked' : ''}
+            onchange="toggleTarea('${t._id}', this.checked)" />
+          <span class="texto">${t.texto}</span>
+          <span class="fecha">${fecha}</span>
+          <button class="btn-borrar" onclick="borrarTarea('${t._id}')">✕</button>
+        </li>`;
+    }).join('');
+  }
+
+  async function agregarTarea() {
+    const input = document.getElementById('nueva');
+    const texto = input.value.trim();
+    if (!texto) return;
+
+    setEstado('Guardando...', '');
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto })
+    });
+
+    if (res.ok) {
+      input.value = '';
+      setEstado('✅ Tarea guardada en MongoDB', 'ok');
+      setTimeout(() => setEstado('', ''), 2500);
+      cargarTareas();
+    }
+  }
+
+  async function toggleTarea(id, completada) {
+    await fetch(`${API}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completada })
+    });
+    cargarTareas();
+  }
+
+  async function borrarTarea(id) {
+    await fetch(`${API}/${id}`, { method: 'DELETE' });
+    setEstado('🗑️ Eliminado de MongoDB', 'ok');
+    setTimeout(() => setEstado('', ''), 2000);
+    cargarTareas();
+  }
+
+  function setEstado(msg, clase) {
+    const el = document.getElementById('estado');
+    el.textContent = msg;
+    el.className = clase;
+  }
+
+  document.getElementById('nueva').addEventListener('keydown', e => {
+    if (e.key === 'Enter') agregarTarea();
+  });
+
+  cargarTareas();
+</script>
+</body>
+</html>
